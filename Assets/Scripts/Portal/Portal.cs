@@ -56,6 +56,7 @@ public class Portal : MonoBehaviour {
                 var rotOld = travellerT.rotation;
                 traveller.Teleport (transform, linkedPortal.transform, m.GetColumn (3), m.rotation);
                 traveller.graphicsClone.transform.SetPositionAndRotation (positionOld, rotOld);
+                Debug.Log("Player passed through portal");
                 // trigger enter/exit wont call reliably since running on fixxed update
                 linkedPortal.OnTravellerEnterPortal (traveller);
                 trackedTravellers.RemoveAt (i);
@@ -86,13 +87,14 @@ public class Portal : MonoBehaviour {
         var localToWorldMatrix = playerCam.transform.localToWorldMatrix;
         var renderPositions = new Vector3[recursionLimit];
         var renderRotations = new Quaternion[recursionLimit];
-
+        Debug.Log("Portal view rendered");
         int startIndex = 0;
         portalCam.projectionMatrix = playerCam.projectionMatrix;
         for (int i = 0; i < recursionLimit; i++) {
             if (i > 0) {
                 //dont render recursion if linked portal isnt visble
                 if (!CameraUtility.BoundsOverlap (screenMeshFilter, linkedPortal.screenMeshFilter, portalCam)) {
+                    Debug.Log("Portal not visible");
                     break;
                 }
             }
@@ -148,7 +150,7 @@ public class Portal : MonoBehaviour {
                 traveller.SetSliceOffsetDst (-screenThickness, true);
             }
         }
-        //handle portal camera position relative to plater
+        //handle portal camera position relative to player
         var offsetFromPortalToCam = portalCamPos - transform.position;
         foreach (var linkedTraveller in linkedPortal.trackedTravellers) {
             var travellerPos = linkedTraveller.graphicsObject.transform.position;
@@ -179,6 +181,7 @@ public class Portal : MonoBehaviour {
         transform.position = pos;
         transform.rotation = rot;
         transform.position -= transform.forward * 0.001f;
+        Debug.Log("Portal placed");
     }
 
         // used when all portal cams are render 
