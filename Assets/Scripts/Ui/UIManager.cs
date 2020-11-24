@@ -21,9 +21,5 @@ public class UIManager : MonoBehaviour
         healthSlider.value = PlayerHealth.health;
     }
 
-    public void UpdateStaminaSlider()
-    {
-        //set stamina slider
-        staminaSlider.value = FPSController.stamina;
-    }
+   
 }

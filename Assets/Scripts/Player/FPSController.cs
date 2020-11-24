@@ -1,163 +1,107 @@
 ﻿using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
-using System.Collections;
 using UnityEngine.UI;
-public class FPSController : MonoBehaviour
-{
-    public CharacterController controller;
-    [SerializeField] UIManager uiManager;
-    public float jumpSpeed = 4f;
-    public float speed = 12f;
-    public float sprintSpeed = 20f;
-    public float normSpeed = 12f;
-    public float gravity = -9.81f;
-    public float jumpForce = 5;
+public class FPSController : PortalTraveller {
+
+    public float walkSpeed = 3;
+    public float runSpeed = 6;
+    public float smoothMoveTime = 0.1f;
+    public float jumpForce = 8;
+    public float gravity = 9.81f;
+    public float maxStamina = 100f;
 
     public bool lockCursor;
-   // public Vector2 pitchMinMax = new Vector2(-40, 85);
+    public Vector2 pitchMinMax = new Vector2 (-40, 85);
+    public float rotationSmoothTime = 0.1f;
 
+    CharacterController controller;
     Camera cam;
     public float yaw;
     public float pitch;
     float smoothYaw;
     float smoothPitch;
+
+    float yawSmoothV;
+    float pitchSmoothV;
     float verticalVelocity;
     Vector3 velocity;
+    Vector3 smoothV;
+    Vector3 rotationSmoothVelocity;
+    Vector3 currentRotation;
 
     bool jumping;
     float lastGroundedTime;
-    public float maxStamina = 100f;
-    public float lastRegen;
-    public float staminaRegenSpeed = 5;
-    public static float stamina;
-    public bool isSprinting = false;
-    public bool isJumping = false;
+    bool disabled;
 
-    public Transform groundCheck;
-    public float groundDistance = 0.1f;
-    public LayerMask groundMask;
-    private Coroutine regen;
-
-    bool isGrounded;
+    UIManager uiManager;
+    Collider wallCollider;
     private void Awake()
     {
         uiManager = FindObjectOfType<UIManager>();
     }
-    void Start()
-    {
+    void Start () {
         cam = Camera.main;
-        Cursor.lockState = CursorLockMode.Locked;
-        jumping = false;
+        if (lockCursor) {
+            Cursor.lockState = CursorLockMode.Locked;
+            Cursor.visible = false;
+        }
 
-        controller = GetComponent<CharacterController>();
+        controller = GetComponent<CharacterController> ();
 
         yaw = transform.eulerAngles.y;
         pitch = cam.transform.localEulerAngles.x;
         smoothYaw = yaw;
         smoothPitch = pitch;
-        stamina = maxStamina;
     }
 
-    void Update()
-    {
+    void Update () {
        
-        //movement
-        Debug.Log("Stamina is: " + stamina);
+        Vector2 input = new Vector2 (Input.GetAxisRaw ("Horizontal"), Input.GetAxisRaw ("Vertical"));
 
-        isGrounded = Physics.CheckSphere(groundCheck.position, groundDistance, groundMask);
+        Vector3 inputDir = new Vector3 (input.x, 0, input.y).normalized;
+        Vector3 worldInputDir = transform.TransformDirection (inputDir);
 
-        if (isGrounded && velocity.y < 0)
-        {
-            velocity.y = -2f;
+        float currentSpeed = (Input.GetKey (KeyCode.LeftShift)) ? runSpeed : walkSpeed;
+        Vector3 targetVelocity = worldInputDir * currentSpeed;
+        velocity = Vector3.SmoothDamp (velocity, targetVelocity, ref smoothV, smoothMoveTime);
+
+        verticalVelocity -= gravity * Time.deltaTime;
+        velocity = new Vector3 (velocity.x, verticalVelocity, velocity.z);
+
+        var flags = controller.Move (velocity * Time.deltaTime);
+        if (flags == CollisionFlags.Below) {
+            jumping = false;
+            lastGroundedTime = Time.time;
+            verticalVelocity = 0;
+        }
+
+        if (Input.GetKeyDown(KeyCode.Space)) {
+            float timeSinceLastTouchedGround = Time.time - lastGroundedTime;
+            if (controller.isGrounded || (!jumping && timeSinceLastTouchedGround < 0.15f )) {
+                jumping = true;
+                verticalVelocity = jumpForce;
+            }
         }
 
         float x = Input.GetAxis("Horizontal");
         float z = Input.GetAxis("Vertical");
 
-        //sprint
-        if (Input.GetKey(KeyCode.LeftShift) && stamina > 0 && isGrounded)
+        if (Input.GetKeyDown(KeyCode.Escape))
         {
-            speed = sprintSpeed;
-            stamina -= 20 * Time.deltaTime;
-            uiManager.UpdateStaminaSlider();
-            Debug.Log("Stamina draining");
-            isSprinting = true;
-            Debug.Log("left shift down " + isSprinting);
-            StopCoroutine(RegenStamina());
-
+            Application.Quit();
         }
-        if (Input.GetKeyUp(KeyCode.LeftShift) && isGrounded)
-        {
-            speed = 12f;
-            isSprinting = false;
-            Debug.Log("left shift up " + isSprinting);
-        }
-        Vector3 move = transform.right * x + transform.forward * z;
-        //Jump
-
-        var flags = controller.Move(move * speed * Time.deltaTime);
-
-        if (flags == CollisionFlags.Below)
-        {
-            jumping = false;
-            lastGroundedTime = Time.time;
-            Debug.Log("last ground time: " + lastGroundedTime);
-            verticalVelocity = 0;
-            Debug.Log("collision flag below");
-            speed = normSpeed;
-        }
-
-        if (Input.GetKeyDown(KeyCode.Space))
-        {
-            Debug.Log("jUMP PRESSED");
-            float timeSinceLastTouchedGround = Time.time - lastGroundedTime;
-            if (isGrounded || (!jumping && timeSinceLastTouchedGround < 0.15f))
-            {
-                Debug.Log("Jumping");
-                jumping = true;
-                velocity.y = jumpForce;
-                speed = jumpSpeed;
-                stamina -= 30;
-                StopCoroutine(RegenStamina());
-            }
-        }
-
-        velocity.y += gravity * Time.deltaTime;
-
-        controller.Move(velocity * Time.deltaTime);
-
-        if (isGrounded && !isSprinting && stamina < 100f)
-        {
-            StartCoroutine(RegenStamina());
-            Debug.Log("Coroutine is running");
-
-            if (regen != null)
-            {
-                StopCoroutine(RegenStamina());
-                Debug.Log("coroutine has stopped");
-            }
-
-            regen = StartCoroutine(RegenStamina());
-        }
-
     }
 
-    private IEnumerator RegenStamina()
-    {
-        yield return new WaitForSeconds(2);
-
-        if (stamina < maxStamina) ;
-        {
-            stamina += maxStamina / 1000;
-            if (stamina > 100)
-            {
-                stamina = 100;
-            }
-            uiManager.UpdateStaminaSlider();
-            yield return new WaitForEndOfFrame();
-        }
-        regen = null;
+    public override void Teleport (Transform fromPortal, Transform toPortal, Vector3 pos, Quaternion rot) {
+        transform.position = pos;
+        Vector3 eulerRot = rot.eulerAngles;
+        float delta = Mathf.DeltaAngle (smoothYaw, eulerRot.y);
+        yaw += delta;
+        smoothYaw += delta;
+        transform.eulerAngles = Vector3.up * smoothYaw;
+        velocity = toPortal.TransformVector (fromPortal.InverseTransformVector (velocity));
+        Physics.SyncTransforms ();
     }
-    
+
 }
